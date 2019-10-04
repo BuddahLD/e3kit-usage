@@ -30,9 +30,8 @@ eclipse-aar/
 ### Gradle ###
 .gradle
 build/
-gradle-wrapper.jar
-gradle-wrapper.properties
 gradle.properties
+!gradle-wrapper.jar
 
 # Ignore Gradle GUI config
 gradle-app.setting
