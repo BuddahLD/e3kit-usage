@@ -36,17 +36,16 @@ package com.virgilsecurity.android.e3kitusage
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import com.virgilsecurity.android.common.callback.OnGetTokenCallback
-import com.virgilsecurity.android.common.exception.AlreadyRegisteredException
-import com.virgilsecurity.android.common.exception.PrivateKeyNotFoundException
-import com.virgilsecurity.android.common.exception.RestoreKeyException
-import com.virgilsecurity.android.common.exception.WrongPasswordException
+import com.virgilsecurity.android.common.exception.*
 import com.virgilsecurity.android.ethree.interaction.EThree
 import com.virgilsecurity.common.callback.OnCompleteListener
 import com.virgilsecurity.common.model.Data
+import com.virgilsecurity.keyknox.exception.EntryAlreadyExistsException
 import com.virgilsecurity.keyknox.exception.EntryNotFoundException
 import com.virgilsecurity.sdk.common.TimeSpan
 import com.virgilsecurity.sdk.crypto.VirgilAccessTokenSigner
 import com.virgilsecurity.sdk.crypto.VirgilCrypto
+import com.virgilsecurity.sdk.crypto.exceptions.CryptoException
 import com.virgilsecurity.sdk.jwt.JwtGenerator
 import java.util.*
 import java.util.concurrent.TimeUnit
@@ -103,10 +102,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     val rotationConfirmed = Random.nextBoolean()
+    val backupPrivateKeyConfirmed = Random.nextBoolean()
     val userSignedIn = Random.nextBoolean()
     val chosenSignIn = Random.nextBoolean()
     val chosenSignUp = Random.nextBoolean()
     val chosenLogOut = Random.nextBoolean()
+
     val password = UUID.randomUUID().toString()
     val tokenBase64String = UUID.randomUUID().toString()
     val identity = UUID.randomUUID().toString()
@@ -250,7 +251,43 @@ class MainActivity : AppCompatActivity() {
 
     // 2) User wants to Sign In
     fun flowTwo() {
+        ethree.register().addCallback(object : OnCompleteListener {
+            override fun onSuccess() {
+                // User has been registered successfully. Private key is now on device locally.
+                val encrypted = ethree.encrypt("Text") // Encrypted for the current e3kit user herself.
 
+                // You have to decide to ask the user or to backup private key automatically.
+                if (backupPrivateKeyConfirmed) { // If backup is in user-confirmation flow.
+                    ethree.backupPrivateKey(password).addCallback(object : OnCompleteListener {
+                        override fun onSuccess() {
+                            // You're good to go. Now you can EThree#restorePrivateKey on other
+                            // devices.
+                        }
+
+                        override fun onError(throwable: Throwable) {
+                            if (throwable is BackupKeyException) {
+                                // You get here if there's already private key backup in Virgil cloud
+                                // with current user's identity.
+                            } else if (throwable is PrivateKeyNotFoundException) {
+                                // You get here if there no private key has been found locally.
+                                // It's impossible to get here in current flow, but if you call
+                                // EThree#cleanup before backup - you can get in this situation.
+                            }
+                        }
+                    })
+                }
+            }
+
+            override fun onError(throwable: Throwable) {
+                if (throwable is AlreadyRegisteredException) {
+                    // e3kit user with provided identity has been already registered
+                } else if (throwable is PrivateKeyPresentException) {
+
+                } else if (throwable is CryptoException) {
+
+                }
+            }
+        })
     }
 
     // 3) User wants to Sign Up
