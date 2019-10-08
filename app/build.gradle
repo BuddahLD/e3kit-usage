@@ -56,12 +56,12 @@ android {
 }
 
 repositories {
-    maven {
-        url = "https://oss.sonatype.org/service/local/repositories/comvirgilsecurity-1258/content/"
-    }
-    maven {
-        url = "https://oss.sonatype.org/service/local/repositories/comvirgilsecurity-1257/content/"
-    }
+//    maven {
+//        url = "https://oss.sonatype.org/service/local/repositories/comvirgilsecurity-1258/content/"
+//    }
+//    maven {
+//        url = "https://oss.sonatype.org/service/local/repositories/comvirgilsecurity-1257/content/"
+//    }
     mavenLocal()
 }
 
