@@ -39,6 +39,7 @@ import com.virgilsecurity.android.common.exception.*
 import com.virgilsecurity.android.ethree.interaction.EThree
 import com.virgilsecurity.common.callback.OnCompleteListener
 import com.virgilsecurity.sdk.crypto.exceptions.CryptoException
+import java.lang.IllegalStateException
 import java.util.*
 import kotlin.random.Random
 
@@ -53,12 +54,28 @@ class MainActivity : AppCompatActivity() {
     val chosenSignIn = Random.nextBoolean()
     val chosenSignUp = Random.nextBoolean()
     val chosenSignOut = Random.nextBoolean()
+    val userAuthState = Random.nextInt(0, 3).let { // Defined by developer in real app
+        when (it) {
+            0 -> AUTH_STATE.USER_SIGNED_IN
+            1 -> AUTH_STATE.USER_WANTS_TO_SIGN_IN
+            2 -> AUTH_STATE.USER_WANTS_TO_SIGN_UP
+            3 -> AUTH_STATE.USER_WANTS_TO_SIGN_OUT
+            else -> throw IllegalStateException()
+        }
+    }
 
     val password = UUID.randomUUID().toString()
     val tokenBase64String = UUID.randomUUID().toString()
     val identity = UUID.randomUUID().toString()
 
     lateinit var ethree: EThree
+
+    enum class AUTH_STATE {
+        USER_SIGNED_IN,
+        USER_WANTS_TO_SIGN_IN,
+        USER_WANTS_TO_SIGN_UP,
+        USER_WANTS_TO_SIGN_OUT
+    }
 
     // -------------------------------------------------------------------------------------------
     // Beginning of usage example with exceptions description ------------------------------------
@@ -82,12 +99,6 @@ class MainActivity : AppCompatActivity() {
      * 4) User wants to Sign Out;
      *
      * It's up to developer to determine what's the current case.
-     *
-     * For example you can use Firebase:
-     * call FirebaseAuth#currentUser to check whether the user is Signed In. If user is not
-     * Signed In - call one of:
-     * FirebaseAuth#createUserWithEmailAndPassword or FirebaseAuth#signInWithEmailAndPassword,
-     * then if operation has finished successful - choose userWantsToSignIn or userWantsToSignUp correspondingly.
      */
     fun e3kitInitPoint() {
         // The place where all utilities are initialized.
@@ -98,23 +109,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
         // Identity has to be the same as in Virgil JWT, so requests for current user are authorized.
-        // context can be any. (e.g. MainActivity's context, Application's context)
+        // Context can be any. (e.g. MainActivity's context, Application's context)
         val ethree = EThree(identity, onGetTokenCallback, this)
 
-        if (userSignedIn) { // It's up to developer to know whether user is Signed In.
-            userAlreadySignedIn()
-        } else {
-            if (chosenSignIn) {
-                userWantsToSignIn()
-            } else if (chosenSignUp) {
-                userWantsToSignUp()
-            }
-        }
+        // It's up to developer to check authorization system's state.
+        when (userAuthState) {
+            AUTH_STATE.USER_SIGNED_IN -> userAlreadySignedIn() // Checked on app startup
+            AUTH_STATE.USER_WANTS_TO_SIGN_IN -> userWantsToSignIn() // E.g. on button click
+            AUTH_STATE.USER_WANTS_TO_SIGN_UP -> userWantsToSignUp() // E.g. on button click
 
-        // 4) User wants to Sign Out
-        // Best practice is to remove private key from device after the session is closed. (e.g. Log Out)
-        if (chosenSignOut) {
-            ethree.cleanup()
+            // 4) User wants to Sign Out
+            // Best practice is to remove private key from device after the session is closed. (e.g. Log Out)
+            AUTH_STATE.USER_WANTS_TO_SIGN_OUT -> ethree.cleanup() // E.g. on button click
         }
     }
 
@@ -153,7 +159,7 @@ class MainActivity : AppCompatActivity() {
                 // User has been registered successfully. Private key is now on the device locally.
                 val encrypted = ethree.encrypt("Text") // Encrypted for the current e3kit user herself.
 
-                // You have to decide to ask a user or to backup the private key automatically.
+                // You have to decide whether to ask a user or to backup the private key automatically.
 
                 if (backupPrivateKeyConfirmed) { // If backup is in user-confirmation flow.
                     ethree.backupPrivateKey(password).addCallback(object : OnCompleteListener {
@@ -202,28 +208,25 @@ class MainActivity : AppCompatActivity() {
 
             override fun onError(throwable: Throwable) {
                 if (throwable is AlreadyRegisteredException) {
-                    // e3kit user with provided identity has been already registered.
+                    // A e3kit user with provided identity has been already registered.
                     //
                     // Possibly you get here because messed up SignIn and SignUp. SignUp should not
-                    // be called if user has been already registered, as well as EThree#register.
+                    // be called if a user has been already registered, as well as EThree#register.
                     //
                     // If you are Sure, that this is an intended behaviour and you want to register
-                    // a user with the same identity (re-register) - you can call EThree#unregister
-                    // first (all old keys for this identity will become outdated) and call
-                    // EThree#register once more to complete registration.
+                    // a user with the same identity (re-register) - you can call:
+                    // EThree#unregister -> EThree#register
+                    // or
+                    // EThree#rotatePrivateKey
+                    // (all old keys for this identity will become outdated)
                 } else if (throwable is PrivateKeyPresentException) {
                     // This exception means that the private key is already present on the device
                     // locally.
                     //
-                    // It's impossible to get this exception while using e3kit only. But you could
-                    // get this exception if you've saved the private key manually before calling
-                    // EThree#register.
-                    // (e.g. using Virgil Core SDK)
-                    //
                     // If you are Sure, that the local private key is not needed (generated with
-                    // Virgil Core SDK by accident, or any other case) any more - you can call
-                    // EThree#cleanup after which call EThree#register once more to complete
-                    // registration.
+                    // Virgil Core SDK by accident, or by calling EThree#register twice or any other
+                    // case) any more - you can call EThree#cleanup after which call EThree#register
+                    // once more to complete registration.
                 } else if (throwable is CryptoException) {
                     // This exception could be thrown if there was an exception while generating
                     // keys during the EThree#register.
@@ -279,9 +282,9 @@ class MainActivity : AppCompatActivity() {
                                 // possible errors for EThree#backupPrivateKey in userWantsToSignUp
                                 // function.
                                 //
-                                // Don't forget to re-fetch current user's public key for other users
-                                // as previous cached public key has become outdated (if other users
-                                // have this public key cached already).
+                                // Don't forget that all other users might have your outdated (old)
+                                // public key.
+                                // You have to update it to the actual one on other user's devices.
                                 val encrypted = ethree.encrypt("Text") // Encrypted for the current e3kit user herself.
                             }
 
@@ -301,8 +304,9 @@ class MainActivity : AppCompatActivity() {
                                     // for current identity in Virgil Cards service is present).
                                     //
                                     // You cannot get this exception in current flow. But you can
-                                    // get this exception if you call EThree#rotatePrivateKey before
-                                    // EThree#register has finished successfully.
+                                    // get this exception if you call EThree#rotatePrivateKey, or
+                                    // EThree#unregister before EThree#register has finished
+                                    // successfully.
                                     //
                                     // This signals you that you have issues with your authorization
                                     // system, because user is already Signed In, while is not
@@ -326,6 +330,9 @@ class MainActivity : AppCompatActivity() {
                     // the EThree#backupPrivateKey)
                     //
                     // Ask other password and try again to restore private key.
+                    // WARNING! You have to wait 2+ seconds before sequential call to
+                    // EThree#restorePrivateKey. If you don't - you'll get throttling error from
+                    // Virgil Cloud.
                 } else if (throwable is PrivateKeyPresentException) {
                     // EThree#restorePrivateKey function can restore private key only if there's no one present
                     // on the device locally, but the private key is already present on the device.
