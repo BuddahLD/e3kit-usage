@@ -38,14 +38,8 @@ import com.virgilsecurity.android.common.callback.OnGetTokenCallback
 import com.virgilsecurity.android.common.exception.*
 import com.virgilsecurity.android.ethree.interaction.EThree
 import com.virgilsecurity.common.callback.OnCompleteListener
-import com.virgilsecurity.common.model.Data
-import com.virgilsecurity.sdk.common.TimeSpan
-import com.virgilsecurity.sdk.crypto.VirgilAccessTokenSigner
-import com.virgilsecurity.sdk.crypto.VirgilCrypto
 import com.virgilsecurity.sdk.crypto.exceptions.CryptoException
-import com.virgilsecurity.sdk.jwt.JwtGenerator
 import java.util.*
-import java.util.concurrent.TimeUnit
 import kotlin.random.Random
 
 class MainActivity : AppCompatActivity() {
@@ -58,16 +52,11 @@ class MainActivity : AppCompatActivity() {
     val userSignedIn = Random.nextBoolean()
     val chosenSignIn = Random.nextBoolean()
     val chosenSignUp = Random.nextBoolean()
-    val chosenLogOut = Random.nextBoolean()
+    val chosenSignOut = Random.nextBoolean()
 
     val password = UUID.randomUUID().toString()
     val tokenBase64String = UUID.randomUUID().toString()
     val identity = UUID.randomUUID().toString()
-    val virgilCrypto = VirgilCrypto()
-
-    val privateKeyData = Data.fromBase64String("MC4CAQAwBQYDK2VwBCIEIPupM43Dt7" +
-            "gJwayKl6EO4qFJbvyALQxap1LcgqoYVREb")
-    val apiKey = virgilCrypto.importPrivateKey(privateKeyData.data).privateKey
 
     lateinit var ethree: EThree
 
@@ -90,7 +79,7 @@ class MainActivity : AppCompatActivity() {
      * 1) User is already Signed In;
      * 2) User wants to Sign In;
      * 3) User wants to Sign Up;
-     * 4) Sign Out
+     * 4) User wants to Sign Out;
      *
      * It's up to developer to determine what's the current case.
      *
@@ -108,7 +97,7 @@ class MainActivity : AppCompatActivity() {
                 return getTokenSynchronously(identity)
             }
         }
-        // identity has to be the same as in Virgil JWT, so requests for current user are authorized.
+        // Identity has to be the same as in Virgil JWT, so requests for current user are authorized.
         // context can be any. (e.g. MainActivity's context, Application's context)
         val ethree = EThree(identity, onGetTokenCallback, this)
 
@@ -122,8 +111,9 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        // 4) User wants to Sign Out
         // Best practice is to remove private key from device after the session is closed. (e.g. Log Out)
-        if (chosenLogOut) {
+        if (chosenSignOut) {
             ethree.cleanup()
         }
     }
@@ -251,14 +241,14 @@ class MainActivity : AppCompatActivity() {
         // There's no private key on device.
         //
         // There're three common cases:
-        // a) private key is in the Virgil cloud (backed up earlier).
-        // b) private key is on the other device but not in the Virgil cloud (needs to be backed up).
-        // c) private key has been lost (there's no backup).
+        // a) Private key is in the Virgil cloud (backed up earlier).
+        // b) Private key is on the other device but not in the Virgil cloud (needs to be backed up).
+        // c) Private key has been lost (there's no backup).
 
         // Try to restore private key from it's backup in Virgil cloud.
         ethree.restorePrivateKey(password).addCallback(object : OnCompleteListener {
             override fun onSuccess() {
-                // a) private key is in the Virgil cloud (backed up earlier)
+                // a) Private key is in the Virgil cloud (backed up earlier)
                 // private key has been restored - all is set up.
                 val encrypted = ethree.encrypt("Text") // Encrypted for the current e3kit user herself.
             }
@@ -268,7 +258,7 @@ class MainActivity : AppCompatActivity() {
                     // Actually in this situation you can't know whether it's b) or c).
                     // We recommend to ask the user for confirmation that the key has been lost.
 
-                    // b) private key is on the other device but not in the Virgil cloud (needs to be backed up).
+                    // b) Private key is on the other device but not in the Virgil cloud (needs to be backed up).
                     // In case user responds that the key has Not been lost - ask her to make a
                     // backup from the device that has private key locally.
                     // Then try to complete the tryToRestorePrivateKey again.
@@ -277,7 +267,7 @@ class MainActivity : AppCompatActivity() {
                     // the rotation of keys, so all previous history will become Undecryptable.
                     // If user confirms that - proceed with c).
 
-                    // c) private key has been lost (there's no backup).
+                    // c) Private key has been lost (there's no backup).
                     if (rotationConfirmed) {
                         ethree.rotatePrivateKey().addCallback(object : OnCompleteListener {
                             override fun onSuccess() {
@@ -297,7 +287,7 @@ class MainActivity : AppCompatActivity() {
 
                             override fun onError(throwable: Throwable) {
                                 if (throwable is PrivateKeyPresentException) {
-                                    // rotatePrivateKey function can rotate keys only if there's no private key present
+                                    // EThree#rotatePrivateKey function can rotate keys only if there's no private key present
                                     // on the device locally, but the private key is already present on the device.
                                     //
                                     // It's impossible to get here in current flow, but EThree#rotatePrivateKey function
@@ -337,7 +327,7 @@ class MainActivity : AppCompatActivity() {
                     //
                     // Ask other password and try again to restore private key.
                 } else if (throwable is PrivateKeyPresentException) {
-                    // restorePrivateKey function can restore private key only if there's no one present
+                    // EThree#restorePrivateKey function can restore private key only if there's no one present
                     // on the device locally, but the private key is already present on the device.
                     //
                     // It's impossible to get here in current flow, but EThree#restorePrivateKey function
