@@ -253,88 +253,88 @@ class MainActivity : AppCompatActivity() {
             override fun onSuccess() {
                 // a) Private key is on Virgil Cloud (backed up earlier)
                 // private key has been restored - all is set up.
-                val encrypted = ethree.encrypt("Text") // Encrypted for the current E3Kit user herself.
+                val encrypted = ethree.encrypt("Text") // Encrypted only for the current user.
             }
 
             override fun onError(throwable: Throwable) {
                 if (throwable is NoPrivateKeyBackupException) {
-                    // Actually in this situation you can't know whether it's b) or c).
+                    // In this situation you can't know whether it's b) or c).
                     // We recommend to ask the user for confirmation that the key has been lost.
 
-                    // b) Private key is on the other device but not on Virgil Cloud (needs to be backed up).
-                    // In case user responds that the key has Not been lost - ask her to make a
-                    // backup from the device that has private key locally.
+                    // b) Private key is on another device but not on Virgil Cloud (needs to be backed up).
+                    // In case the user replies that the key hasn't been lost - ask them to make a
+                    // backup from the device that has the private key locally.
                     // Then try to complete the tryToRestorePrivateKey again.
 
-                    // In case user responds that the key has been lost - ask user to confirm
-                    // the rotation of keys, so all previous history will become Undecryptable.
-                    // If user confirms that - proceed with c).
+                    // In case the user replies that the key has been lost - ask the user to confirm
+                    // the rotation of keys. All previous history will become undecryptable.
+                    // If the user confirms - proceed with c).
 
                     // c) Private key has been lost (there's no backup).
                     if (rotationConfirmed) {
                         ethree.rotatePrivateKey().addCallback(object : OnCompleteListener {
                             override fun onSuccess() {
-                                // New public key has been published to the Virgil Cards service.
-                                // New private key has been saved locally on the device.
+                                // New public key has been published to Virgil Cloud.
+                                // The new private key has been saved locally on the device.
                                 //
-                                // You could want to make a private key backup right away after keys
+                                // You may want to make a private key backup right after keys
                                 // rotation, so you can call EThree#backupPrivateKey. Please, see
-                                // possible errors for EThree#backupPrivateKey in userWantsToSignUp
+                                // possible errors for EThree#backupPrivateKey in the userWantsToSignUp
                                 // function.
                                 //
-                                // Don't forget that all other users might have your outdated (old)
+                                // Don't forget that all other users might have your old
                                 // public key.
-                                // You have to update it to the actual one on other user's devices.
-                                val encrypted = ethree.encrypt("Text") // Encrypted for the current E3Kit user herself.
+                                // You have to update it on the other users' devices to the newest one.
+                                val encrypted = ethree.encrypt("Text") // Encrypted only for the current user.
                             }
 
                             override fun onError(throwable: Throwable) {
                                 if (throwable is PrivateKeyPresentException) {
-                                    // EThree#rotatePrivateKey function can rotate keys only if there's no private key present
-                                    // on the device locally, but the private key is already present on the device.
+                                    // The EThree#rotatePrivateKey function can rotate keys only if there's no private key present
+                                    // locally on the device. But in this case the private key is already present on the device.
                                     //
-                                    // It's impossible to get here in current flow, but EThree#rotatePrivateKey function
-                                    // can be called in other flows when private key is present on the device locally.
+                                    // It's impossible to get here in the current flow, but EThree#rotatePrivateKey
+                                    // can be called in other flows when the private key is present locally on the device.
                                     //
-                                    // You have to call EThree#cleanup in order to remove local private key.
-                                    // As well you can check EThree#hasLocalPrivateKey before calling EThree#rotatePrivateKey.
+                                    // You have to call EThree#cleanup in order to remove the local private key.
+                                    // You can also check EThree#hasLocalPrivateKey before calling EThree#rotatePrivateKey.
                                 } else if (throwable is UserNotRegisteredException) {
                                     // Thrown if EThree#rotatePrivateKey is called before EThree#register.
-                                    // Means that there is no E3Kit User registered yet (No public key
-                                    // for current identity in Virgil Cards service is present).
+                                    // It means there is no E3Kit user registered yet (no public key
+                                    // for the current identity is present on Virgil Cloud).
                                     //
-                                    // You cannot get this exception in current flow. But you can
+                                    // You cannot get this exception in the current flow. But you can
                                     // get this exception if you call EThree#rotatePrivateKey, or
                                     // EThree#unregister before EThree#register has finished
                                     // successfully.
                                     //
                                     // This signals you that you have issues with your authorization
-                                    // system, because user is already Signed In, while is not
+                                    // system, because the user seems to be signed in, while not
                                     // registered yet.
-                                    // If this by any case is an intended situation - you can register
+                                    // If this is an intended situation - you can register the
                                     // user with EThree#register.
                                 } else if (throwable is CryptoException) {
                                     // This exception could be thrown if there was an exception while generating
                                     // keys during the EThree#register.
                                     //
-                                    // The only thing you can do - try to call EThree#register once more.
+                                    // The only thing you can do is to try and call EThree#register once more.
                                     //
-                                    // All known E3Kit use-cases do not throw this exception. It's better to contact
-                                    // developer in case of this exception.
+                                    // This behavior is not expected in any cases. If it happens, it's better to contact
+                                    // the Virgil Security team with a full log.
                                 }
                             }
                         })
                     }
                 } else if (throwable is WrongPasswordException) {
-                    // User provided wrong password. (Different from the one that had been used for
-                    // the EThree#backupPrivateKey)
+                    // User provided wrong password. (Different from the one that had been provided in
+                    // EThree#backupPrivateKey)
                     //
-                    // Ask other password and try again to restore private key.
-                    // WARNING! You have to wait 2+ seconds before sequential call to
-                    // EThree#restorePrivateKey. If you don't - you'll get throttling error from
+                    // Ask for another password and try again to restore the private key.
+                    // WARNING! You have to wait 2+ seconds before a sequential call to
+                    // EThree#restorePrivateKey. If you don't - you'll get a throttling error from
                     // Virgil Cloud.
                 } else if (throwable is PrivateKeyPresentException) {
-                    // EThree#restorePrivateKey function can restore private key only if there's no one present
+                    // EThree#restorePrivateKey function can restore the private key only if one is not already present locally.
                     // But the private key is already present on the device.
                     //
                     // It's impossible to get here in the current flow, but EThree#restorePrivateKey
